@@ -1,0 +1,26 @@
+body {
+    text-align:center;
+    font-family:sans-serif;
+    background:#0e6363;
+    color:white;
+}
+
+h1 {
+    font-size:4em;
+}
+
+a {
+    color:inherit;
+}
+
+a:hover {
+    text-decoration:none;
+}
+
+#center-div {
+    display:inline-block;
+}
+
+#game-canvas {
+    background:#004c4c;
+}
