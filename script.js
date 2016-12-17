@@ -5,6 +5,7 @@
 // TODO: Display seed so that a level can be shared
 // TODO: Split script into multiple files?
 
+// These are the dimensions used for generating and drawing the board.
 const dimensions = {
     tileWidth: 80,
     tileHeight: 80,
@@ -14,6 +15,8 @@ const dimensions = {
     boardHeight: 6
 }
 
+// In this enumeration the possible directions in which connections can go are stored.
+// Center is used for connecting endpoints to other tiles.
 const directions = {
     top: 1,
     right: 2,
@@ -22,20 +25,26 @@ const directions = {
     center: 5
 }
 
+// In this enumeration the status of a tile is stored.
+// It can be part of a complete path, a partial path or none path at all.
 const pathStatus = {
     none: 1,
     partial: 2,
     complete: 3
 }
 
+// This is the entry point for our game.
 window.onload = function() {
     var canvas = document.getElementById('game-canvas');
     if(canvas.getContext) {
         canvas.width = dimensions.horizontalMargin + (dimensions.boardWidth * (dimensions.tileWidth + dimensions.horizontalMargin));
         canvas.height = dimensions.verticalMargin + (dimensions.boardHeight * (dimensions.tileHeight + dimensions.verticalMargin));
-        
-        var board = generateBoard();
+        var context = canvas.getContext('2d');
+        var board = generateBoard();        
+        updateBoard(board);
+        drawBoard(context, board);
 
+        // When the canvas is clicked we rotate the corresponding tile and update and redraw the board.
         canvas.onclick = function(event) {
             event.preventDefault();
             var x = Math.floor((event.offsetX - dimensions.horizontalMargin) / (dimensions.tileWidth + dimensions.horizontalMargin));
@@ -47,23 +56,21 @@ window.onload = function() {
             drawBoard(context, board);
         }
 
-        // To prevent selecting text with double clicking:
+        // To prevent selecting text when double clicking we listen to onselectstart and return false.
         canvas.onselectstart = function() {
             return false;
         }
 
+        // When the restart link is clicked we generate a new board.
         document.getElementById('restart-link').onclick = function(event) {
             board = generateBoard();
             updateBoard(board);
             drawBoard(context, board);
         }
-
-        var context = canvas.getContext('2d');
-        updateBoard(board);
-        drawBoard(context, board);
     }
 }
 
+// Here we generate a new board. This function leaves much to desire.
 function generateBoard() {
     var board = [];
     for(var x = 0; x < dimensions.boardWidth; x++) {
@@ -93,6 +100,7 @@ function generateBoard() {
     return board;
 }
 
+// This function draws the board with much room for improvements.
 function drawBoard(context, board) {
     context.clearRect(0, 0, context.canvas.width, context.canvas.height);
     for(var x = 0; x < board.length; x++) {
@@ -168,6 +176,7 @@ function drawBoard(context, board) {
     }
 }
 
+// This function updates the board by resetting all statuses and calling followPath for all endpoints.
 function updateBoard(board) {
     var endpoints = [];
     for(var x = 0; x < board.length; x++) {
@@ -191,6 +200,8 @@ function updateBoard(board) {
     document.getElementById('path-counter').innerText = checkedEndpoints.length;
 }
 
+// This function uses recursion to traverse a path from one endpoint to another, if possible.
+// We also update the statuses of all visited tiles, depending on the completeness of the path.
 function followPath(board, tile, lastDirection) {
     for(var i = 0; i < tile.connections.length; i++) {
         var connection = tile.connections[i];
@@ -237,6 +248,7 @@ function followPath(board, tile, lastDirection) {
     return false;
 }
 
+// This function returns the opposite of the given direction.
 function getOppositeDirection(direction) {
     var opposites = [];
     opposites[directions.top] = directions.bottom;
@@ -246,12 +258,14 @@ function getOppositeDirection(direction) {
     return opposites[direction];
 }
 
+// This prototype represents a single tile on the board.
 function Tile(x, y, connections) {
     this.x = x;
     this.y = y;
     this.connections = connections;
     this.pathStatus = pathStatus.none;
 
+    // This function checks if this tile is an endpoint by inspecting all incoming connections.
     this.isEndpoint = function() {
         for(var i = 0; i < this.connections.length; i++) {
             for(var j = 0; j < this.connections[i].length; j++) {
@@ -263,6 +277,7 @@ function Tile(x, y, connections) {
         return false;
     }
 
+    // This function rotates the tile by simply assigning the next enumeration value.
     this.rotate = function() {
         for(var i = 0; i < this.connections.length; i++) {
             for(var j = 0; j < this.connections[i].length; j++) {
