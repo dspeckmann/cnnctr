@@ -4,6 +4,8 @@
 // TODO: Put boundary check in function
 // TODO: Display seed so that a level can be shared
 // TODO: Split script into multiple files?
+// TODO: Allow configuration, e.g. the size of the board or the number of endpoints
+// TODO: Responsive design
 
 // These are the dimensions used for generating and drawing the board.
 const dimensions = {
