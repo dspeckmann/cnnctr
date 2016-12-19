@@ -1,316 +1,358 @@
 // TODO: Generate actual paths and not just random tiles
-// TODO: Improve getOppositeDirection
-// TODO: Put fillRect in function
 // TODO: Put boundary check in function
 // TODO: Prevent non-relevant tiles from being highlighted once a path is complete
 // TODO: Display seed so that a level can be shared
-// TODO: Split script into multiple files?
 // TODO: Allow configuration, e.g. the size of the board or the number of endpoints
-// TODO: Improve color scheme
-// TODO: Responsive design
 
-// These are the dimensions used for generating and drawing the board.
-const dimensions = {
-    tileMargin: 2,
-    boardWidth: 8,
-    boardHeight: 8
-}
-
-var tileSize;
+// This constant represents the margin between two tiles.
+const MARGIN = 2;
 
 // In this enumeration the possible directions in which connections can go are stored.
-// Center is used for connecting endpoints to other tiles.
-const directions = {
-    top: 1,
-    right: 2,
-    bottom: 3,
-    left: 4,
-    center: 5
+// CENTER is used for connecting endpoints to other tiles.
+const DIRECTION = {
+    TOP: 1,
+    RIGHT: 2,
+    BOTTOM: 3,
+    LEFT: 4,
+    CENTER: 5
 }
 
 // In this enumeration the status of a tile is stored.
-// It can be part of a complete path, a partial path or none path at all.
-const pathStatus = {
-    none: 1,
-    partial: 2,
-    complete: 3
+// It can be part of a complete path, a partial path or no path at all.
+const PATHSTATUS = {
+    NONE: 1,
+    PARTIAL: 2,
+    COMPLETE: 3
 }
 
 // This is the entry point for our game.
 window.onload = function() {
     var canvas = document.getElementById('game-canvas');
-    if(canvas.getContext) {
-        calculateDimensions();
-        var context = canvas.getContext('2d');
-        var board = generateBoard();        
-        updateBoard(board);
-        drawBoard(context, board);
+    if(!canvas.getContext) {
+        return;
+    }
 
-        // When the canvas is clicked we rotate the corresponding tile and update and redraw the board.
-        canvas.onclick = function(event) {
-            event.preventDefault();
-            var x = Math.floor((event.offsetX - dimensions.tileMargin) / (tileSize + dimensions.tileMargin));
-            var y = Math.floor((event.offsetY - dimensions.tileMargin) / (tileSize + dimensions.tileMargin));
-            if(x >= 0 && x < (dimensions.boardWidth) && y >= 0 && y < (dimensions.boardHeight)) {
-                board[x][y].rotate();
+    var game = new Game(canvas);
+    game.start();
+
+    // When the restart link is clicked we restart the game.
+    document.getElementById('restart-link').onclick = function(event) {
+        game.start();
+    }
+
+    canvas.onclick = function(event) {
+        event.preventDefault();
+        game.onclick({ x: event.offsetX, y: event.offsetY});
+    }
+
+    window.onresize = function(event) {
+        game.onresize();
+    }
+}
+
+// This class represents the game logic.
+function Game(canvas) {
+    this.canvas = canvas;
+    this.context = canvas.getContext('2d');
+    this.boardWidth;
+    this.boardHeight;
+    this.tileSize;
+
+    // To start a game we generate a new board based on the user's input and display it.
+    this.start = function() {
+        if(!this.validateUserInput()) {
+            return;
+        }
+        this.boardWidth = document.getElementById('input-width').value;
+        this.boardHeight = document.getElementById('input-height').value;
+        this.calculateDimensions();
+        this.generateBoard();
+        this.update();
+        this.draw();
+    }
+
+    // Here we resize the canvas to match its parent div's dimensions. After that the new tile size is calculated.
+    this.calculateDimensions = function() {
+        this.canvas.width = this.canvas.parentNode.clientWidth;
+        this.tileSize = Math.floor((this.canvas.width - MARGIN) / this.boardWidth) - MARGIN;
+        this.canvas.width = MARGIN + (this.boardWidth * (this.tileSize + MARGIN));
+        this.canvas.height = MARGIN + (this.boardHeight * (this.tileSize + MARGIN));
+    }
+
+    // Here we generate a new board. This function leaves much to desire.
+    this.generateBoard = function() {
+        this.board = [];
+        for(var x = 0; x < this.boardWidth; x++) {
+            this.getRandomConnection = function() {
+                var rand = Math.random();
+                if(rand > 0.88) {
+                    return [DIRECTION.TOP, DIRECTION.RIGHT];
+                } else if(rand > 0.66) {
+                    return [DIRECTION.RIGHT, DIRECTION.BOTTOM];
+                } else if(rand > 0.44) {
+                    return [DIRECTION.BOTTOM, DIRECTION.LEFT];
+                } else if(rand > 0.22) {
+                    return [DIRECTION.LEFT, DIRECTION.TOP];
+                } else {
+                    return [DIRECTION.TOP, DIRECTION.BOTTOM];
+                }
             }
-            updateBoard(board);
-            drawBoard(context, board);
+
+            this.board[x] = [];
+            for(var y = 0; y < this.boardHeight; y++) {
+                // We want one to three connections per tile with 40% probability for one, 35% for two and 25% for three.
+                var rand = Math.random();
+                var count;
+                if(rand > 0.6) {
+                    count = 1;
+                } else if(rand > 0.25) {
+                    count = 2;
+                } else {
+                    count = 3;
+                }
+                var connections = [];
+                for(var i = 0; i < count; i++) {
+                    connections.push(this.getRandomConnection());
+                }
+                this.board[x][y] = new Tile(x, y, connections);
+            }
         }
 
-        // To prevent selecting text when double clicking we listen to onselectstart and return false.
-        canvas.onselectstart = function() {
+        // Choose random endpoints.
+        var endpointCount = document.getElementById('input-endpoints').value;
+        for(var i = 0; i < endpointCount; i++) {
+            var x = Math.floor(Math.random() * this.boardWidth);
+            var y = Math.floor(Math.random() * this.boardHeight);
+
+            if(this.board[x][y].connections[0][0] === DIRECTION.CENTER) {
+                i--;
+                continue;
+            }
+
+            this.board[x][y].connections = [[DIRECTION.CENTER, this.board[x][y].connections[0][1]]];
+        }
+
+        document.getElementById('path-counter-max').innerText = endpointCount / 2;
+    }
+
+    // This function updates the board by resetting all statuses and calling followPath for all endpoints.
+    this.update = function() {
+        // This function uses recursion to traverse a path from one endpoint to another, if possible.
+        // We also update the statuses of all visited tiles, depending on the completeness of the path.
+        this.followPath = function(tile, lastDirection, alreadyVisited = []) {
+            // This function returns the opposite of the given direction.
+            this.getOppositeDirection = function(direction) {
+                var opposites = [];
+                opposites[DIRECTION.TOP] = DIRECTION.BOTTOM;
+                opposites[DIRECTION.RIGHT] = DIRECTION.LEFT;
+                opposites[DIRECTION.BOTTOM] = DIRECTION.TOP;
+                opposites[DIRECTION.LEFT] = DIRECTION.RIGHT;
+                return opposites[direction];
+            }
+
+            // We need to check if this tile has already been visited to prevent endless loops.
+            if(alreadyVisited.indexOf(tile) !== -1) {
+                return false;
+            }
+
+            alreadyVisited.push(tile);
+            for(var i = 0; i < tile.connections.length; i++) {
+                var connection = tile.connections[i];
+                var newDirection;
+                if(connection[0] == lastDirection) {
+                    newDirection = connection[1];
+                } else if(connection[1] == lastDirection) {
+                    newDirection = connection[0];
+                } else {
+                    continue;
+                }
+
+                tile.pathStatus = PATHSTATUS.PARTIAL;
+
+                var newX = tile.x;
+                var newY = tile.y;
+                switch(newDirection) {
+                    case DIRECTION.TOP:
+                        newY--;
+                        break;
+                    case DIRECTION.RIGHT:
+                        newX++;
+                        break;
+                    case DIRECTION.BOTTOM:
+                        newY++;
+                        break;
+                    case DIRECTION.LEFT:
+                        newX--;
+                        break;
+                    case DIRECTION.CENTER:
+                        tile.pathStatus = PATHSTATUS.COMPLETE;
+                        return tile;
+                }
+
+                if(newX >= 0 && newX < this.boardWidth && newY >= 0 && newY < this.boardHeight) {
+                    var endpoint = this.followPath(this.board[newX][newY], this.getOppositeDirection(newDirection), alreadyVisited);
+                    if(endpoint) {
+                        tile.pathStatus = PATHSTATUS.COMPLETE;
+                        return endpoint;
+                    }
+                }
+            }
+
             return false;
         }
 
-        // When the window gets resized we need to recalculate the dimensions and redraw the board to match the new window size.
-        window.onresize = function() {
-            calculateDimensions();
-            drawBoard(context, board);
-        }
-
-        // Here we resize the canvas to match its parent div's dimensions. After that the new tile size is calculated.
-        function calculateDimensions() {
-            canvas.width = canvas.parentNode.clientWidth;
-            tileSize = Math.floor((canvas.width - dimensions.tileMargin) / dimensions.boardWidth) - dimensions.tileMargin;
-            canvas.width = dimensions.tileMargin + (dimensions.boardWidth * (tileSize + dimensions.tileMargin));
-            canvas.height = dimensions.tileMargin + (dimensions.boardHeight * (tileSize + dimensions.tileMargin));
-        }
-
-        // When the restart link is clicked we generate a new board.
-        document.getElementById('restart-link').onclick = function(event) {
-            board = generateBoard();
-            updateBoard(board);
-            drawBoard(context, board);
-        }
-    }
-}
-
-function getRandomConnection() {
-    var rand = Math.random();
-    if(rand > 0.88) {
-        return [directions.top, directions.right];
-    } else if(rand > 0.66) {
-        return [directions.right, directions.bottom];
-    } else if(rand > 0.44) {
-        return [directions.bottom, directions.left];
-    } else if(rand > 0.22) {
-        return [directions.left, directions.top];
-    } else {
-        return [directions.top, directions.bottom];
-    }
-}
-
-// Here we generate a new board. This function leaves much to desire.
-function generateBoard() {
-    var board = [];
-    for(var x = 0; x < dimensions.boardWidth; x++) {
-        board[x] = [];
-        for(var y = 0; y < dimensions.boardHeight; y++) {
-            // We want one to three connections per tile with 40% probability for one, 35% for two and 25% for three.
-            var rand = Math.random();
-            var count;
-            if(rand > 0.6) {
-                count = 1;
-            } else if(rand > 0.25) {
-                count = 2;
-            } else {
-                count = 3;
+        var endpoints = [];
+        for(var x = 0; x < this.board.length; x++) {
+            for(var y = 0; y < this.board[x].length; y++) {
+                this.board[x][y].pathStatus = PATHSTATUS.NONE;
+                if(this.board[x][y].isEndpoint()) {
+                    endpoints.push(this.board[x][y]);
+                }
             }
-            var connections = [];
-            for(var i = 0; i < count; i++) {
-                connections.push(getRandomConnection());
-            }
-            board[x][y] = new Tile(x, y, connections);
         }
+        var checkedEndpoints = [];
+        for(var i = 0; i < endpoints.length; i++) {
+            if(checkedEndpoints.indexOf(endpoints[i]) === -1) {
+                var endpoint = this.followPath(endpoints[i], DIRECTION.CENTER);
+                if(endpoint) {
+                    checkedEndpoints.push(endpoint);
+                }
+            }
+        }
+        document.getElementById('path-counter-current').innerText = checkedEndpoints.length;
     }
 
-    // Choose random endpoints.
-    var endpointCount = 6;
-    for(var i = 0; i < endpointCount; i++) {
-        var x = Math.floor(Math.random() * dimensions.boardWidth);
-        var y = Math.floor(Math.random() * dimensions.boardHeight);
+    // This function draws the board with much room for improvements.
+    this.draw = function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        for(var x = 0; x < this.board.length; x++) {
+            for(var y = 0; y < this.board[x].length; y++) {
+                var horizontalOffset = MARGIN + (x * (this.tileSize + MARGIN));
+                var verticalOffset = MARGIN + (y * (this.tileSize + MARGIN));
 
-        if(board[x][y].connections[0][0] === directions.center) {
-            i--;
-            continue;
-        }
-
-        board[x][y].connections = [[directions.center, board[x][y].connections[0][1]]];
-    }
-
-    document.getElementById('path-counter-max').innerText = endpointCount / 2;
-
-    return board;
-}
-
-// This function draws the board with much room for improvements.
-function drawBoard(context, board) {
-    context.clearRect(0, 0, context.canvas.width, context.canvas.height);
-    for(var x = 0; x < board.length; x++) {
-        for(var y = 0; y < board[x].length; y++) {
-            var horizontalOffset = dimensions.tileMargin + (x * (tileSize + dimensions.tileMargin));
-            var verticalOffset = dimensions.tileMargin + (y * (tileSize + dimensions.tileMargin));
-
-            if(board[x][y].pathStatus === pathStatus.partial) {
-                context.fillStyle = '#ffe28d';
-            } else if(board[x][y].pathStatus === pathStatus.complete) {
-                context.fillStyle = '#73d0a6';
-            } else {
-                context.fillStyle = '#ffffff';
-            }
-
-            context.fillRect(
-                horizontalOffset,
-                verticalOffset,
-                tileSize,
-                tileSize
-            );
-            
-            context.strokeStyle = '#4982ab';
-            
-            for(var i = 0; i < board[x][y].connections.length; i++) {
-                context.lineWidth = 4;
-                context.beginPath();
-
-                var connection = board[x][y].connections[i];
-
-                if((connection[0] == directions.top && connection[1] == directions.right) ||(connection[0] == directions.right && connection[1] == directions.top)) {
-                    // Top Right:
-                    context.arc(horizontalOffset + tileSize, verticalOffset, (tileSize / 2), 0.5 * Math.PI, Math.PI);
-                } else if((connection[0] == directions.bottom && connection[1] == directions.right) ||(connection[0] == directions.right && connection[1] == directions.bottom)) {
-                    // Bottom Right:
-                    context.arc(horizontalOffset + tileSize, verticalOffset + tileSize, (tileSize / 2), Math.PI, 1.5 * Math.PI);
-                } else if((connection[0] == directions.bottom && connection[1] == directions.left) ||(connection[0] == directions.left && connection[1] == directions.bottom)) {
-                    // Bottom Left:
-                    context.arc(horizontalOffset, verticalOffset + tileSize, (tileSize / 2), 1.5 * Math.PI, 0);
-                } else if((connection[0] == directions.top && connection[1] == directions.left) ||(connection[0] == directions.left && connection[1] == directions.top)) {
-                    // Top Left:
-                    context.arc(horizontalOffset, verticalOffset, (tileSize / 2), 0, 0.5 * Math.PI);
+                if(this.board[x][y].pathStatus === PATHSTATUS.PARTIAL) {
+                    this.context.fillStyle = '#ffe28d';
+                } else if(this.board[x][y].pathStatus === PATHSTATUS.COMPLETE) {
+                    this.context.fillStyle = '#73d0a6';
                 } else {
-                    function getStrokePosition(direction) {
-                        switch(direction) {
-                            case directions.top:
-                                return { x: horizontalOffset + (tileSize / 2), y: verticalOffset };
-                            case directions.right:
-                                return { x: horizontalOffset + tileSize, y: verticalOffset + (tileSize / 2) };
-                            case directions.bottom:
-                                return { x: horizontalOffset + (tileSize / 2), y: verticalOffset + tileSize };
-                            case directions.left:
-                                return { x: horizontalOffset, y: verticalOffset + (tileSize / 2) };
-                            case directions.center:
-                                return { x: horizontalOffset + (tileSize / 2), y: verticalOffset + (tileSize / 2) };
-                                break;
-                        }
-                    }
-
-                    var start = getStrokePosition(connection[0]);
-                    var end = getStrokePosition(connection[1]);
-
-                    context.moveTo(start.x, start.y);
-                    context.lineTo(end.x, end.y);  
+                    this.context.fillStyle = '#ffffff';
                 }
 
-                context.stroke();
-            }
+                this.context.fillRect(
+                    horizontalOffset,
+                    verticalOffset,
+                    this.tileSize,
+                    this.tileSize
+                );
+                
+                this.context.strokeStyle = '#4982ab';
+                
+                for(var i = 0; i < this.board[x][y].connections.length; i++) {
+                    this.context.lineWidth = 4;
+                    this.context.beginPath();
 
-            if(board[x][y].isEndpoint()) {
-                context.beginPath();
-                context.arc(horizontalOffset + tileSize / 2, verticalOffset + tileSize / 2, tileSize / 5, 0, 2 * Math.PI)
-                context.fillStyle = '#ffffff';
-                context.fill();
-                context.stroke();
+                    var connection = this.board[x][y].connections[i];
+
+                    if((connection[0] == DIRECTION.TOP && connection[1] == DIRECTION.RIGHT) || (connection[0] == DIRECTION.RIGHT && connection[1] == DIRECTION.TOP)) {
+                        // TOP RIGHT:
+                        this.context.arc(horizontalOffset + this.tileSize, verticalOffset, (this.tileSize / 2), 0.5 * Math.PI, Math.PI);
+                    } else if((connection[0] == DIRECTION.BOTTOM && connection[1] == DIRECTION.RIGHT) || (connection[0] == DIRECTION.RIGHT && connection[1] == DIRECTION.BOTTOM)) {
+                        // BOTTOM RIGHT:
+                        this.context.arc(horizontalOffset + this.tileSize, verticalOffset + this.tileSize, (this.tileSize / 2), Math.PI, 1.5 * Math.PI);
+                    } else if((connection[0] == DIRECTION.BOTTOM && connection[1] == DIRECTION.LEFT) || (connection[0] == DIRECTION.LEFT && connection[1] == DIRECTION.BOTTOM)) {
+                        // BOTTOM LEFT:
+                        this.context.arc(horizontalOffset, verticalOffset + this.tileSize, (this.tileSize / 2), 1.5 * Math.PI, 0);
+                    } else if((connection[0] == DIRECTION.TOP && connection[1] == DIRECTION.LEFT) || (connection[0] == DIRECTION.LEFT && connection[1] == DIRECTION.TOP)) {
+                        // TOP LEFT:
+                        this.context.arc(horizontalOffset, verticalOffset, (this.tileSize / 2), 0, 0.5 * Math.PI);
+                    } else {
+                        this.getStrokePosition = function(direction) {
+                            switch(direction) {
+                                case DIRECTION.TOP:
+                                    return { x: horizontalOffset + (this.tileSize / 2), y: verticalOffset };
+                                case DIRECTION.RIGHT:
+                                    return { x: horizontalOffset + this.tileSize, y: verticalOffset + (this.tileSize / 2) };
+                                case DIRECTION.BOTTOM:
+                                    return { x: horizontalOffset + (this.tileSize / 2), y: verticalOffset + this.tileSize };
+                                case DIRECTION.LEFT:
+                                    return { x: horizontalOffset, y: verticalOffset + (this.tileSize / 2) };
+                                case DIRECTION.CENTER:
+                                    return { x: horizontalOffset + (this.tileSize / 2), y: verticalOffset + (this.tileSize / 2) };
+                                    break;
+                            }
+                        }
+
+                        var start = this.getStrokePosition(connection[0]);
+                        var end = this.getStrokePosition(connection[1]);
+
+                        this.context.moveTo(start.x, start.y);
+                        this.context.lineTo(end.x, end.y);
+                    }
+
+                    this.context.stroke();
+                }
+
+                if(this.board[x][y].isEndpoint()) {
+                    this.context.beginPath();
+                    this.context.arc(horizontalOffset + this.tileSize / 2, verticalOffset + this.tileSize / 2, this.tileSize / 5, 0, 2 * Math.PI)
+                    this.context.fillStyle = '#ffffff';
+                    this.context.fill();
+                    this.context.stroke();
+                }
             }
         }
     }
-}
 
-// This function updates the board by resetting all statuses and calling followPath for all endpoints.
-function updateBoard(board) {
-    var endpoints = [];
-    for(var x = 0; x < board.length; x++) {
-        for(var y = 0; y < board[x].length; y++) {
-            board[x][y].pathStatus = pathStatus.none;
-            if(board[x][y].isEndpoint()) {
-                endpoints.push(board[x][y]);
-            }
+    // When we let the user enter values we obviously have to check if they are valid.
+    this.validateUserInput = function() {
+        var boardWidth = document.getElementById('input-width').value;
+        var boardHeight = document.getElementById('input-height').value;
+        var endpoints = document.getElementById('input-endpoints').value;
+
+        if(endpoints < 2) {
+            alert('There must be at least two endpoints!')
+            return false;
+        } else if (endpoints > (boardWidth * boardHeight)) {
+            alert('There cannot be more endpoints than tiles!');
+            return false;
+        } else if(endpoints % 2 != 0) {
+            alert('There must be an even number of endpoints!');
+            return false;
         }
+
+        if(boardWidth < 2) {
+            alert('The board must be at least two tiles wide!');
+            return false;
+        }
+
+        if(boardHeight < 2) {
+            alert('The board must be at least two tiles high!');
+        }
+
+        return true;
     }
 
-    var checkedEndpoints = [];
-    for(var i = 0; i < endpoints.length; i++) {
-        if(checkedEndpoints.indexOf(endpoints[i]) === -1) {
-            var endpoint = followPath(board, endpoints[i], directions.center);
-            if(endpoint) {
-                checkedEndpoints.push(endpoint);
-            }
+    // When the canvas is clicked we rotate the corresponding tile and update and redraw the board.
+    this.onclick = function(location) {
+        var x = Math.floor((location.x - MARGIN) / (this.tileSize + MARGIN));
+        var y = Math.floor((location.y - MARGIN) / (this.tileSize + MARGIN));
+        if(x >= 0 && x < (this.boardWidth) && y >= 0 && y < (this.boardHeight)) {
+            this.board[x][y].rotate();
         }
+        this.update();
+        this.draw();
     }
-    document.getElementById('path-counter-current').innerText = checkedEndpoints.length;
-}
 
-// This function uses recursion to traverse a path from one endpoint to another, if possible.
-// We also update the statuses of all visited tiles, depending on the completeness of the path.
-function followPath(board, tile, lastDirection, alreadyVisited = []) {
-    // We need to check if this tile has already been visited to prevent endless loops.
-    if(alreadyVisited.indexOf(tile) !== -1) {
+    // When the window gets resized we need to recalculate the dimensions and redraw the board to match the new window size.
+    this.onresize = function() {
+        this.calculateDimensions();
+        this.draw();
+    }
+
+    // To prevent selecting text when double clicking we listen to onselectstart and return false.
+    canvas.onselectstart = function() {
         return false;
     }
-
-    alreadyVisited.push(tile);
-    for(var i = 0; i < tile.connections.length; i++) {
-        var connection = tile.connections[i];
-        var newDirection;
-        if(connection[0] == lastDirection) {
-            newDirection = connection[1];
-        } else if(connection[1] == lastDirection) {
-            newDirection = connection[0];
-        } else {
-            continue;
-        }
-
-        tile.pathStatus = pathStatus.partial;
-
-        var newX = tile.x;
-        var newY = tile.y;
-        switch(newDirection) {
-            case directions.top:
-                newY--;
-                break;
-            case directions.right:
-                newX++;
-                break;
-            case directions.bottom:
-                newY++;
-                break;
-            case directions.left:
-                newX--;
-                break;
-            case directions.center:
-                tile.pathStatus = pathStatus.complete;
-                return tile;
-        }
-
-        if(newX >= 0 && newX < dimensions.boardWidth && newY >= 0 && newY < dimensions.boardHeight) {
-            var endpoint = followPath(board, board[newX][newY], getOppositeDirection(newDirection), alreadyVisited);
-            if(endpoint) {
-                tile.pathStatus = pathStatus.complete;
-                return endpoint;
-            }
-        }
-    }
-
-    return false;
-}
-
-// This function returns the opposite of the given direction.
-function getOppositeDirection(direction) {
-    var opposites = [];
-    opposites[directions.top] = directions.bottom;
-    opposites[directions.right] = directions.left;
-    opposites[directions.bottom] = directions.top;
-    opposites[directions.left] = directions.right;
-    return opposites[direction];
 }
 
 // This prototype represents a single tile on the board.
@@ -318,13 +360,13 @@ function Tile(x, y, connections) {
     this.x = x;
     this.y = y;
     this.connections = connections;
-    this.pathStatus = pathStatus.none;
+    this.pathStatus = PATHSTATUS.NONE;
 
     // This function checks if this tile is an endpoint by inspecting all incoming connections.
     this.isEndpoint = function() {
         for(var i = 0; i < this.connections.length; i++) {
             for(var j = 0; j < this.connections[i].length; j++) {
-                if(this.connections[i][j] == directions.center) {
+                if(this.connections[i][j] == DIRECTION.CENTER) {
                     return true;
                 }
             }
