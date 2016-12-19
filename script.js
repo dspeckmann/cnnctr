@@ -68,6 +68,8 @@ function Game(canvas) {
         this.update();
         this.draw();
         this.running = true;
+        document.getElementById('status-message').style.display = 'block';
+        document.getElementById('success-message').style.display = 'none';
     }
 
     // Here we resize the canvas to match its parent div's dimensions. After that the new tile size is calculated.
@@ -99,15 +101,17 @@ function Game(canvas) {
 
             this.board[x] = [];
             for(var y = 0; y < this.boardHeight; y++) {
-                // We want one to three connections per tile with 40% probability for one, 35% for two and 25% for three.
+                // We want zero to three connections per tile with 40% probability for one, 30% for two, 20% for three and 10% for none at all.
                 var rand = Math.random();
                 var count;
                 if(rand > 0.6) {
                     count = 1;
-                } else if(rand > 0.25) {
+                } else if(rand > 0.3) {
                     count = 2;
-                } else {
+                } else if(rand > 0.1) {
                     count = 3;
+                } else {
+                    count = 0;
                 }
                 var connections = [];
                 for(var i = 0; i < count; i++) {
@@ -221,7 +225,8 @@ function Game(canvas) {
         document.getElementById('path-counter-current').innerText = checkedEndpoints.length;
         if(checkedEndpoints.length === endpoints.length / 2) {
             this.running = false;
-            alert('You connected all endpoints. Great job!');
+            document.getElementById('status-message').style.display = 'none';
+            document.getElementById('success-message').style.display = 'block';
         }
     }
 
@@ -237,6 +242,8 @@ function Game(canvas) {
                     this.context.fillStyle = '#ffe28d';
                 } else if(this.board[x][y].pathStatus === PATHSTATUS.COMPLETE) {
                     this.context.fillStyle = '#73d0a6';
+                } else if(this.board[x][y].connections.length === 0) {
+                    this.context.fillStyle = '#ff8d63';
                 } else {
                     this.context.fillStyle = '#ffffff';
                 }

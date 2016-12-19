@@ -37,3 +37,7 @@ footer {
 #game-canvas {
     background:#004c4c;
 }
+
+#success-message {
+    display:none;
+}

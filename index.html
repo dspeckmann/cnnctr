@@ -10,14 +10,17 @@
             <header>
                 <h1>Loop</h1>
             </header>
-            <p>
+            <p id="status-message">
                 Completed Paths: <span id="path-counter-current">0</span> / <span id="path-counter-max">0</span>
+            </p>
+            <p id="success-message">
+                You connected all paths!
             </p>
             <canvas id="game-canvas">
                 Your browser does not support the canvas element.
             </canvas>
             <p>
-                Width: <input type="number" id="input-width" value="8" min="2" /> Height: <input type="number" id="input-height" value="8" min="2" /> Endpoints: <input type="number" id="input-endpoints" value="6" min="2" step="2" /> <a href="#" id="restart-link">Start</a>
+                Width: <input type="number" id="input-width" value="6" min="2" /> Height: <input type="number" id="input-height" value="6" min="2" /> Endpoints: <input type="number" id="input-endpoints" value="4" min="2" step="2" /> <a href="#" id="restart-link">Start</a>
             </p>
             <footer>
                 <p>
