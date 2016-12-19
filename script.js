@@ -2,6 +2,7 @@
 // TODO: Improve getOppositeDirection
 // TODO: Put fillRect in function
 // TODO: Put boundary check in function
+// TODO: Prevent non-relevant tiles from being highlighted once a path is complete
 // TODO: Display seed so that a level can be shared
 // TODO: Split script into multiple files?
 // TODO: Allow configuration, e.g. the size of the board or the number of endpoints
@@ -10,12 +11,10 @@
 
 // These are the dimensions used for generating and drawing the board.
 const dimensions = {
-    tileWidth: 80,
-    tileHeight: 80,
-    horizontalMargin: 2,
-    verticalMargin: 2,
-    boardWidth: 6,
-    boardHeight: 6
+    tileSize: 60,
+    tileMargin: 2,
+    boardWidth: 8,
+    boardHeight: 8
 }
 
 // In this enumeration the possible directions in which connections can go are stored.
@@ -40,8 +39,8 @@ const pathStatus = {
 window.onload = function() {
     var canvas = document.getElementById('game-canvas');
     if(canvas.getContext) {
-        canvas.width = dimensions.horizontalMargin + (dimensions.boardWidth * (dimensions.tileWidth + dimensions.horizontalMargin));
-        canvas.height = dimensions.verticalMargin + (dimensions.boardHeight * (dimensions.tileHeight + dimensions.verticalMargin));
+        canvas.width = dimensions.tileMargin + (dimensions.boardWidth * (dimensions.tileSize + dimensions.tileMargin));
+        canvas.height = dimensions.tileMargin + (dimensions.boardHeight * (dimensions.tileSize + dimensions.tileMargin));
         var context = canvas.getContext('2d');
         var board = generateBoard();        
         updateBoard(board);
@@ -50,8 +49,8 @@ window.onload = function() {
         // When the canvas is clicked we rotate the corresponding tile and update and redraw the board.
         canvas.onclick = function(event) {
             event.preventDefault();
-            var x = Math.floor((event.offsetX - dimensions.horizontalMargin) / (dimensions.tileWidth + dimensions.horizontalMargin));
-            var y = Math.floor((event.offsetY - dimensions.verticalMargin) / (dimensions.tileHeight + dimensions.verticalMargin));
+            var x = Math.floor((event.offsetX - dimensions.tileMargin) / (dimensions.tileSize + dimensions.tileMargin));
+            var y = Math.floor((event.offsetY - dimensions.tileMargin) / (dimensions.tileSize + dimensions.tileMargin));
             if(x >= 0 && x < (dimensions.boardWidth) && y >= 0 && y < (dimensions.boardHeight)) {
                 board[x][y].rotate();
             }
@@ -136,49 +135,27 @@ function drawBoard(context, board) {
     context.clearRect(0, 0, context.canvas.width, context.canvas.height);
     for(var x = 0; x < board.length; x++) {
         for(var y = 0; y < board[x].length; y++) {
-            var horizontalOffset = dimensions.horizontalMargin + (x * (dimensions.tileWidth + dimensions.horizontalMargin));
-            var verticalOffset = dimensions.verticalMargin + (y * (dimensions.tileHeight + dimensions.verticalMargin));
+            var horizontalOffset = dimensions.tileMargin + (x * (dimensions.tileSize + dimensions.tileMargin));
+            var verticalOffset = dimensions.tileMargin + (y * (dimensions.tileSize + dimensions.tileMargin));
 
             if(board[x][y].pathStatus === pathStatus.partial) {
                 context.fillStyle = '#ffc08b';
-                context.fillRect(
-                    horizontalOffset,
-                    verticalOffset,
-                    dimensions.tileWidth,
-                    dimensions.tileHeight
-                );
             } else if(board[x][y].pathStatus === pathStatus.complete) {
                 context.fillStyle = '#72d172';
-                context.fillRect(
-                    horizontalOffset,
-                    verticalOffset,
-                    dimensions.tileWidth,
-                    dimensions.tileHeight
-                );
             } else {
                 context.fillStyle = '#ffffff';
-                context.fillRect(
-                    horizontalOffset,
-                    verticalOffset,
-                    dimensions.tileWidth,
-                    dimensions.tileHeight
-                );
             }
 
-            if(board[x][y].isEndpoint()) {
-                context.fillStyle = '#006363';
-                context.fillRect(
-                    horizontalOffset + 20,
-                    verticalOffset + 20,
-                    dimensions.tileWidth - 40,
-                    dimensions.tileHeight - 40
-                );
-            }
-
+            context.fillRect(
+                horizontalOffset,
+                verticalOffset,
+                dimensions.tileSize,
+                dimensions.tileSize
+            );
+            
+            context.strokeStyle = '#006363';
             
             for(var i = 0; i < board[x][y].connections.length; i++) {
-                // TODO: When using circles the tiles should always be squares
-                context.strokeStyle = '#006363';
                 context.lineWidth = 4;
                 context.beginPath();
 
@@ -186,29 +163,29 @@ function drawBoard(context, board) {
 
                 if((connection[0] == directions.top && connection[1] == directions.right) ||(connection[0] == directions.right && connection[1] == directions.top)) {
                     // Top Right:
-                    context.arc(horizontalOffset + dimensions.tileWidth, verticalOffset, (dimensions.tileHeight / 2), 0.5 * Math.PI, Math.PI);
+                    context.arc(horizontalOffset + dimensions.tileSize, verticalOffset, (dimensions.tileSize / 2), 0.5 * Math.PI, Math.PI);
                 } else if((connection[0] == directions.bottom && connection[1] == directions.right) ||(connection[0] == directions.right && connection[1] == directions.bottom)) {
                     // Bottom Right:
-                    context.arc(horizontalOffset + dimensions.tileWidth, verticalOffset + dimensions.tileHeight, (dimensions.tileHeight / 2), Math.PI, 1.5 * Math.PI);
+                    context.arc(horizontalOffset + dimensions.tileSize, verticalOffset + dimensions.tileSize, (dimensions.tileSize / 2), Math.PI, 1.5 * Math.PI);
                 } else if((connection[0] == directions.bottom && connection[1] == directions.left) ||(connection[0] == directions.left && connection[1] == directions.bottom)) {
                     // Bottom Left:
-                    context.arc(horizontalOffset, verticalOffset + dimensions.tileHeight, (dimensions.tileHeight / 2), 1.5 * Math.PI, 0);
+                    context.arc(horizontalOffset, verticalOffset + dimensions.tileSize, (dimensions.tileSize / 2), 1.5 * Math.PI, 0);
                 } else if((connection[0] == directions.top && connection[1] == directions.left) ||(connection[0] == directions.left && connection[1] == directions.top)) {
                     // Top Left:
-                    context.arc(horizontalOffset, verticalOffset, (dimensions.tileHeight / 2), 0, 0.5 * Math.PI);
+                    context.arc(horizontalOffset, verticalOffset, (dimensions.tileSize / 2), 0, 0.5 * Math.PI);
                 } else {
                     function getStrokePosition(direction) {
                         switch(direction) {
                             case directions.top:
-                                return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset };
+                                return { x: horizontalOffset + (dimensions.tileSize / 2), y: verticalOffset };
                             case directions.right:
-                                return { x: horizontalOffset + dimensions.tileWidth, y: verticalOffset + (dimensions.tileHeight / 2) };
+                                return { x: horizontalOffset + dimensions.tileSize, y: verticalOffset + (dimensions.tileSize / 2) };
                             case directions.bottom:
-                                return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset + dimensions.tileHeight };
+                                return { x: horizontalOffset + (dimensions.tileSize / 2), y: verticalOffset + dimensions.tileSize };
                             case directions.left:
-                                return { x: horizontalOffset, y: verticalOffset + (dimensions.tileHeight / 2) };
+                                return { x: horizontalOffset, y: verticalOffset + (dimensions.tileSize / 2) };
                             case directions.center:
-                                return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset + (dimensions.tileHeight / 2) };
+                                return { x: horizontalOffset + (dimensions.tileSize / 2), y: verticalOffset + (dimensions.tileSize / 2) };
                                 break;
                         }
                     }
@@ -220,6 +197,14 @@ function drawBoard(context, board) {
                     context.lineTo(end.x, end.y);  
                 }
 
+                context.stroke();
+            }
+
+            if(board[x][y].isEndpoint()) {
+                context.beginPath();
+                context.arc(horizontalOffset + dimensions.tileSize / 2, verticalOffset + dimensions.tileSize / 2, dimensions.tileSize / 5, 0, 2 * Math.PI)
+                context.fillStyle = '#ffffff';
+                context.fill();
                 context.stroke();
             }
         }
@@ -252,7 +237,13 @@ function updateBoard(board) {
 
 // This function uses recursion to traverse a path from one endpoint to another, if possible.
 // We also update the statuses of all visited tiles, depending on the completeness of the path.
-function followPath(board, tile, lastDirection) {
+function followPath(board, tile, lastDirection, alreadyVisited = []) {
+    // We need to check if this tile has already been visited to prevent endless loops.
+    if(alreadyVisited.indexOf(tile) !== -1) {
+        return false;
+    }
+
+    alreadyVisited.push(tile);
     for(var i = 0; i < tile.connections.length; i++) {
         var connection = tile.connections[i];
         var newDirection;
@@ -287,11 +278,11 @@ function followPath(board, tile, lastDirection) {
         }
 
         if(newX >= 0 && newX < dimensions.boardWidth && newY >= 0 && newY < dimensions.boardHeight) {
-            var newTile = followPath(board, board[newX][newY], getOppositeDirection(newDirection));
-            if(newTile) {
+            var endpoint = followPath(board, board[newX][newY], getOppositeDirection(newDirection), alreadyVisited);
+            if(endpoint) {
                 tile.pathStatus = pathStatus.complete;
+                return endpoint;
             }
-            return newTile;
         }
     }
 
