@@ -54,6 +54,7 @@ window.onload = function() {
 function Game(canvas) {
     this.canvas = canvas;
     this.context = canvas.getContext('2d');
+    this.running = false;
     this.boardWidth;
     this.boardHeight;
     this.tileSize;
@@ -69,6 +70,7 @@ function Game(canvas) {
         this.generateBoard();
         this.update();
         this.draw();
+        this.running = true;
     }
 
     // Here we resize the canvas to match its parent div's dimensions. After that the new tile size is calculated.
@@ -220,6 +222,10 @@ function Game(canvas) {
             }
         }
         document.getElementById('path-counter-current').innerText = checkedEndpoints.length;
+        if(checkedEndpoints.length === endpoints.length / 2) {
+            this.running = false;
+            alert('You connected all endpoints. Great job!');
+        }
     }
 
     // This function draws the board with much room for improvements.
@@ -334,6 +340,10 @@ function Game(canvas) {
 
     // When the canvas is clicked we rotate the corresponding tile and update and redraw the board.
     this.onclick = function(location) {
+        if(!this.running) {
+            return;
+        }
+
         var x = Math.floor((location.x - MARGIN) / (this.tileSize + MARGIN));
         var y = Math.floor((location.y - MARGIN) / (this.tileSize + MARGIN));
         if(x >= 0 && x < (this.boardWidth) && y >= 0 && y < (this.boardHeight)) {
