@@ -1,10 +1,11 @@
-// TODO: Generate board by building paths and then randomly rotating tiles
+// TODO: Generate actual paths and not just random tiles
 // TODO: Improve getOppositeDirection
 // TODO: Put fillRect in function
 // TODO: Put boundary check in function
 // TODO: Display seed so that a level can be shared
 // TODO: Split script into multiple files?
 // TODO: Allow configuration, e.g. the size of the board or the number of endpoints
+// TODO: Improve color scheme
 // TODO: Responsive design
 
 // These are the dimensions used for generating and drawing the board.
@@ -72,32 +73,60 @@ window.onload = function() {
     }
 }
 
+function getRandomConnection() {
+    var rand = Math.random();
+    if(rand > 0.88) {
+        return [directions.top, directions.right];
+    } else if(rand > 0.66) {
+        return [directions.right, directions.bottom];
+    } else if(rand > 0.44) {
+        return [directions.bottom, directions.left];
+    } else if(rand > 0.22) {
+        return [directions.left, directions.top];
+    } else {
+        return [directions.top, directions.bottom];
+    }
+}
+
 // Here we generate a new board. This function leaves much to desire.
 function generateBoard() {
     var board = [];
     for(var x = 0; x < dimensions.boardWidth; x++) {
         board[x] = [];
         for(var y = 0; y < dimensions.boardHeight; y++) {
-            var connections;
+            // We want one to three connections per tile with 40% probability for one, 35% for two and 25% for three.
             var rand = Math.random();
-            if(rand > 0.75) {
-                connections = [[directions.top, directions.right]];
-            } else if(rand > 0.5) {
-                connections = [[directions.right, directions.bottom]];
+            var count;
+            if(rand > 0.6) {
+                count = 1;
             } else if(rand > 0.25) {
-                connections = [[directions.bottom, directions.left]];
+                count = 2;
             } else {
-                connections = [[directions.top, directions.bottom]];
+                count = 3;
+            }
+            var connections = [];
+            for(var i = 0; i < count; i++) {
+                connections.push(getRandomConnection());
             }
             board[x][y] = new Tile(x, y, connections);
         }
     }
 
-    board[5][5].connections = [[directions.center, directions.bottom]];
-    board[3][3].connections = [[directions.top, directions.right], [directions.bottom, directions.left]];
-    board[4][1].connections = [[directions.top, directions.center]];
-    board[0][5].connections = [[directions.center, directions.bottom]];
-    board[3][4].connections = [[directions.right, directions.center]];
+    // Choose random endpoints.
+    var endpointCount = 6;
+    for(var i = 0; i < endpointCount; i++) {
+        var x = Math.floor(Math.random() * dimensions.boardWidth);
+        var y = Math.floor(Math.random() * dimensions.boardHeight);
+
+        if(board[x][y].connections[0][0] === directions.center) {
+            i--;
+            continue;
+        }
+
+        board[x][y].connections = [[directions.center, board[x][y].connections[0][1]]];
+    }
+
+    document.getElementById('path-counter-max').innerText = endpointCount / 2;
 
     return board;
 }
@@ -146,32 +175,51 @@ function drawBoard(context, board) {
                 );
             }
 
+            
             for(var i = 0; i < board[x][y].connections.length; i++) {
-                function getStrokePosition(direction) {
-                    switch(direction) {
-                        case directions.top:
-                            return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset };
-                        case directions.right:
-                            return { x: horizontalOffset + dimensions.tileWidth, y: verticalOffset + (dimensions.tileHeight / 2) };
-                        case directions.bottom:
-                            return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset + dimensions.tileHeight };
-                        case directions.left:
-                            return { x: horizontalOffset, y: verticalOffset + (dimensions.tileHeight / 2) };
-                        case directions.center:
-                            return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset + (dimensions.tileHeight / 2) };
-                            break;
-                    }
-                }
+                // TODO: When using circles the tiles should always be squares
+                context.strokeStyle = '#006363';
+                context.lineWidth = 4;
+                context.beginPath();
 
                 var connection = board[x][y].connections[i];
-                var start = getStrokePosition(connection[0]);
-                var end = getStrokePosition(connection[1]);
 
-                context.strokeStyle = '#006363';
-                context.lineWidth = 3;
-                context.beginPath();
-                context.moveTo(start.x, start.y);
-                context.lineTo(end.x, end.y);
+                if((connection[0] == directions.top && connection[1] == directions.right) ||(connection[0] == directions.right && connection[1] == directions.top)) {
+                    // Top Right:
+                    context.arc(horizontalOffset + dimensions.tileWidth, verticalOffset, (dimensions.tileHeight / 2), 0.5 * Math.PI, Math.PI);
+                } else if((connection[0] == directions.bottom && connection[1] == directions.right) ||(connection[0] == directions.right && connection[1] == directions.bottom)) {
+                    // Bottom Right:
+                    context.arc(horizontalOffset + dimensions.tileWidth, verticalOffset + dimensions.tileHeight, (dimensions.tileHeight / 2), Math.PI, 1.5 * Math.PI);
+                } else if((connection[0] == directions.bottom && connection[1] == directions.left) ||(connection[0] == directions.left && connection[1] == directions.bottom)) {
+                    // Bottom Left:
+                    context.arc(horizontalOffset, verticalOffset + dimensions.tileHeight, (dimensions.tileHeight / 2), 1.5 * Math.PI, 0);
+                } else if((connection[0] == directions.top && connection[1] == directions.left) ||(connection[0] == directions.left && connection[1] == directions.top)) {
+                    // Top Left:
+                    context.arc(horizontalOffset, verticalOffset, (dimensions.tileHeight / 2), 0, 0.5 * Math.PI);
+                } else {
+                    function getStrokePosition(direction) {
+                        switch(direction) {
+                            case directions.top:
+                                return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset };
+                            case directions.right:
+                                return { x: horizontalOffset + dimensions.tileWidth, y: verticalOffset + (dimensions.tileHeight / 2) };
+                            case directions.bottom:
+                                return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset + dimensions.tileHeight };
+                            case directions.left:
+                                return { x: horizontalOffset, y: verticalOffset + (dimensions.tileHeight / 2) };
+                            case directions.center:
+                                return { x: horizontalOffset + (dimensions.tileWidth / 2), y: verticalOffset + (dimensions.tileHeight / 2) };
+                                break;
+                        }
+                    }
+
+                    var start = getStrokePosition(connection[0]);
+                    var end = getStrokePosition(connection[1]);
+
+                    context.moveTo(start.x, start.y);
+                    context.lineTo(end.x, end.y);  
+                }
+
                 context.stroke();
             }
         }
@@ -199,7 +247,7 @@ function updateBoard(board) {
             }
         }
     }
-    document.getElementById('path-counter').innerText = checkedEndpoints.length;
+    document.getElementById('path-counter-current').innerText = checkedEndpoints.length;
 }
 
 // This function uses recursion to traverse a path from one endpoint to another, if possible.
