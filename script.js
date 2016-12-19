@@ -107,7 +107,17 @@ function Game(canvas) {
                         connection = new Connection(DIRECTION.TOP, DIRECTION.BOTTOM);
                     }
 
-                    connections.push(connection);
+                    // Check if an equal connection already exists so we don't add it again.
+                    var alreadyExists = false;
+                    for(var j = 0; j < connections.length; j++) {
+                        if(connections[j].equals(connection)) {
+                            alreadyExists = true;
+                        }
+                    }
+
+                    if(!alreadyExists) {
+                        connections.push(connection);
+                    }
 
                 }
                 this.board[x][y] = new Tile(x, y, connections);
@@ -179,6 +189,7 @@ function Game(canvas) {
                         newX--;
                         break;
                     case DIRECTION.CENTER:
+                        console.log(tile);
                         connection.isPartOfPath = true;
                         return tile;
                 }
@@ -186,6 +197,7 @@ function Game(canvas) {
                 if(newX >= 0 && newX < this.boardWidth && newY >= 0 && newY < this.boardHeight) {
                     var endpoint = this.followPath(this.board[newX][newY], this.getOppositeDirection(newDirection), alreadyVisited);
                     if(endpoint) {
+                        console.log(tile);
                         connection.isPartOfPath = true;
                         return endpoint;
                     }
@@ -414,5 +426,9 @@ function Connection(start, end) {
         
         if(this.end < 4) this.end++;
         else if(this.end === 4) this.end = 1;
+    }
+
+    this.equals = function(other) {
+        return (this.start === other.start && this.end === other.end) || (this.start === other.end && this.end === other.start);
     }
 }
