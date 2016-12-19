@@ -1,8 +1,5 @@
 // TODO: Generate actual paths and not just random tiles
-// TODO: Put boundary check in function
 // TODO: Prevent non-relevant tiles from being highlighted once a path is complete
-// TODO: Display seed so that a level can be shared
-// TODO: Allow configuration, e.g. the size of the board or the number of endpoints
 
 // This constant represents the margin between two tiles.
 const MARGIN = 2;
