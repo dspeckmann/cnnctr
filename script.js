@@ -1,5 +1,6 @@
 // TODO: Generate actual paths and not just random tiles
 // TODO: Prevent non-relevant tiles from being highlighted once a path is complete
+// TODO: Randomize endpoint orientation
 
 // This constant represents the margin between two tiles.
 const MARGIN = 2;
@@ -12,14 +13,6 @@ const DIRECTION = {
     BOTTOM: 3,
     LEFT: 4,
     CENTER: 5
-}
-
-// In this enumeration the status of a tile is stored.
-// It can be part of a complete path, a partial path or no path at all.
-const PATHSTATUS = {
-    NONE: 1,
-    PARTIAL: 2,
-    COMPLETE: 3
 }
 
 // This is the entry point for our game.
@@ -84,21 +77,6 @@ function Game(canvas) {
     this.generateBoard = function() {
         this.board = [];
         for(var x = 0; x < this.boardWidth; x++) {
-            this.getRandomConnection = function() {
-                var rand = Math.random();
-                if(rand > 0.88) {
-                    return [DIRECTION.TOP, DIRECTION.RIGHT];
-                } else if(rand > 0.66) {
-                    return [DIRECTION.RIGHT, DIRECTION.BOTTOM];
-                } else if(rand > 0.44) {
-                    return [DIRECTION.BOTTOM, DIRECTION.LEFT];
-                } else if(rand > 0.22) {
-                    return [DIRECTION.LEFT, DIRECTION.TOP];
-                } else {
-                    return [DIRECTION.TOP, DIRECTION.BOTTOM];
-                }
-            }
-
             this.board[x] = [];
             for(var y = 0; y < this.boardHeight; y++) {
                 // We want zero to three connections per tile with 40% probability for one, 30% for two, 20% for three and 10% for none at all.
@@ -115,7 +93,22 @@ function Game(canvas) {
                 }
                 var connections = [];
                 for(var i = 0; i < count; i++) {
-                    connections.push(this.getRandomConnection());
+                    rand = Math.random();
+                    var connection;
+                    if(rand > 0.88) {
+                        connection = new Connection(DIRECTION.TOP, DIRECTION.RIGHT);
+                    } else if(rand > 0.66) {
+                        connection = new Connection(DIRECTION.RIGHT, DIRECTION.BOTTOM);
+                    } else if(rand > 0.44) {
+                        connection = new Connection(DIRECTION.BOTTOM, DIRECTION.LEFT);
+                    } else if(rand > 0.22) {
+                        connection = new Connection(DIRECTION.LEFT, DIRECTION.TOP);
+                    } else {
+                        connection = new Connection(DIRECTION.TOP, DIRECTION.BOTTOM);
+                    }
+
+                    connections.push(connection);
+
                 }
                 this.board[x][y] = new Tile(x, y, connections);
             }
@@ -127,12 +120,12 @@ function Game(canvas) {
             var x = Math.floor(Math.random() * this.boardWidth);
             var y = Math.floor(Math.random() * this.boardHeight);
 
-            if(this.board[x][y].connections[0][0] === DIRECTION.CENTER) {
+            if(this.board[x][y].isEndpoint()) {
                 i--;
                 continue;
             }
 
-            this.board[x][y].connections = [[DIRECTION.CENTER, this.board[x][y].connections[0][1]]];
+            this.board[x][y].connections = [new Connection(DIRECTION.CENTER, DIRECTION.RIGHT)];
         }
 
         document.getElementById('path-counter-max').innerText = endpointCount / 2;
@@ -162,15 +155,13 @@ function Game(canvas) {
             for(var i = 0; i < tile.connections.length; i++) {
                 var connection = tile.connections[i];
                 var newDirection;
-                if(connection[0] == lastDirection) {
-                    newDirection = connection[1];
-                } else if(connection[1] == lastDirection) {
-                    newDirection = connection[0];
+                if(connection.start === lastDirection) {
+                    newDirection = connection.end;
+                } else if(connection.end === lastDirection) {
+                    newDirection = connection.start;
                 } else {
                     continue;
                 }
-
-                tile.pathStatus = PATHSTATUS.PARTIAL;
 
                 var newX = tile.x;
                 var newY = tile.y;
@@ -188,14 +179,14 @@ function Game(canvas) {
                         newX--;
                         break;
                     case DIRECTION.CENTER:
-                        tile.pathStatus = PATHSTATUS.COMPLETE;
+                        connection.isPartOfPath = true;
                         return tile;
                 }
 
                 if(newX >= 0 && newX < this.boardWidth && newY >= 0 && newY < this.boardHeight) {
                     var endpoint = this.followPath(this.board[newX][newY], this.getOppositeDirection(newDirection), alreadyVisited);
                     if(endpoint) {
-                        tile.pathStatus = PATHSTATUS.COMPLETE;
+                        connection.isPartOfPath = true;
                         return endpoint;
                     }
                 }
@@ -207,7 +198,9 @@ function Game(canvas) {
         var endpoints = [];
         for(var x = 0; x < this.board.length; x++) {
             for(var y = 0; y < this.board[x].length; y++) {
-                this.board[x][y].pathStatus = PATHSTATUS.NONE;
+                for(var i = 0; i < this.board[x][y].connections.length; i++) {
+                    this.board[x][y].connections[i].isPartOfPath = false;
+                }
                 if(this.board[x][y].isEndpoint()) {
                     endpoints.push(this.board[x][y]);
                 }
@@ -238,11 +231,7 @@ function Game(canvas) {
                 var horizontalOffset = MARGIN + (x * (this.tileSize + MARGIN));
                 var verticalOffset = MARGIN + (y * (this.tileSize + MARGIN));
 
-                if(this.board[x][y].pathStatus === PATHSTATUS.PARTIAL) {
-                    this.context.fillStyle = '#ffe28d';
-                } else if(this.board[x][y].pathStatus === PATHSTATUS.COMPLETE) {
-                    this.context.fillStyle = '#73d0a6';
-                } else if(this.board[x][y].connections.length === 0) {
+                if(this.board[x][y].isObstacle()) {
                     this.context.fillStyle = '#ff8d63';
                 } else {
                     this.context.fillStyle = '#ffffff';
@@ -255,24 +244,28 @@ function Game(canvas) {
                     this.tileSize
                 );
                 
-                this.context.strokeStyle = '#4982ab';
-                
                 for(var i = 0; i < this.board[x][y].connections.length; i++) {
+                    var connection = this.board[x][y].connections[i];
+
+                    if(connection.isPartOfPath) {
+                        this.context.strokeStyle = '#73d0a6';
+                    } else {
+                        this.context.strokeStyle = '#4982ab';
+                    }
+
                     this.context.lineWidth = 4;
                     this.context.beginPath();
 
-                    var connection = this.board[x][y].connections[i];
-
-                    if((connection[0] == DIRECTION.TOP && connection[1] == DIRECTION.RIGHT) || (connection[0] == DIRECTION.RIGHT && connection[1] == DIRECTION.TOP)) {
+                    if((connection.start == DIRECTION.TOP && connection.end == DIRECTION.RIGHT) || (connection.start == DIRECTION.RIGHT && connection.end == DIRECTION.TOP)) {
                         // TOP RIGHT:
                         this.context.arc(horizontalOffset + this.tileSize, verticalOffset, (this.tileSize / 2), 0.5 * Math.PI, Math.PI);
-                    } else if((connection[0] == DIRECTION.BOTTOM && connection[1] == DIRECTION.RIGHT) || (connection[0] == DIRECTION.RIGHT && connection[1] == DIRECTION.BOTTOM)) {
+                    } else if((connection.start == DIRECTION.BOTTOM && connection.end == DIRECTION.RIGHT) || (connection.start == DIRECTION.RIGHT && connection.end == DIRECTION.BOTTOM)) {
                         // BOTTOM RIGHT:
                         this.context.arc(horizontalOffset + this.tileSize, verticalOffset + this.tileSize, (this.tileSize / 2), Math.PI, 1.5 * Math.PI);
-                    } else if((connection[0] == DIRECTION.BOTTOM && connection[1] == DIRECTION.LEFT) || (connection[0] == DIRECTION.LEFT && connection[1] == DIRECTION.BOTTOM)) {
+                    } else if((connection.start == DIRECTION.BOTTOM && connection.end == DIRECTION.LEFT) || (connection.start == DIRECTION.LEFT && connection.end == DIRECTION.BOTTOM)) {
                         // BOTTOM LEFT:
                         this.context.arc(horizontalOffset, verticalOffset + this.tileSize, (this.tileSize / 2), 1.5 * Math.PI, 0);
-                    } else if((connection[0] == DIRECTION.TOP && connection[1] == DIRECTION.LEFT) || (connection[0] == DIRECTION.LEFT && connection[1] == DIRECTION.TOP)) {
+                    } else if((connection.start == DIRECTION.TOP && connection.end == DIRECTION.LEFT) || (connection.start == DIRECTION.LEFT && connection.end == DIRECTION.TOP)) {
                         // TOP LEFT:
                         this.context.arc(horizontalOffset, verticalOffset, (this.tileSize / 2), 0, 0.5 * Math.PI);
                     } else {
@@ -292,8 +285,8 @@ function Game(canvas) {
                             }
                         }
 
-                        var start = this.getStrokePosition(connection[0]);
-                        var end = this.getStrokePosition(connection[1]);
+                        var start = this.getStrokePosition(connection.start);
+                        var end = this.getStrokePosition(connection.end);
 
                         this.context.moveTo(start.x, start.y);
                         this.context.lineTo(end.x, end.y);
@@ -305,7 +298,11 @@ function Game(canvas) {
                 if(this.board[x][y].isEndpoint()) {
                     this.context.beginPath();
                     this.context.arc(horizontalOffset + this.tileSize / 2, verticalOffset + this.tileSize / 2, this.tileSize / 5, 0, 2 * Math.PI)
-                    this.context.fillStyle = '#ffffff';
+                    if(this.board[x][y].isPartOfPath()) {
+                        this.context.fillStyle = '#73d0a6';
+                    } else {
+                        this.context.fillStyle = '#ffffff';
+                    }
                     this.context.fill();
                     this.context.stroke();
                 }
@@ -374,30 +371,48 @@ function Tile(x, y, connections) {
     this.x = x;
     this.y = y;
     this.connections = connections;
-    this.pathStatus = PATHSTATUS.NONE;
 
     // This function checks if this tile is an endpoint by inspecting all incoming connections.
     this.isEndpoint = function() {
         for(var i = 0; i < this.connections.length; i++) {
-            for(var j = 0; j < this.connections[i].length; j++) {
-                if(this.connections[i][j] == DIRECTION.CENTER) {
-                    return true;
-                }
-            }
+            if(this.connections[i].isEndpoint()) return true;
         }
         return false;
+    }
+
+    this.isPartOfPath = function() {
+        for(var i = 0; i < this.connections.length; i++) {
+            if(this.connections[i].isPartOfPath) return true;
+        }
+        return false;
+    }
+
+    this.isObstacle = function() {
+        return this.connections.length === 0;   
     }
 
     // This function rotates the tile by simply assigning the next enumeration value.
     this.rotate = function() {
         for(var i = 0; i < this.connections.length; i++) {
-            for(var j = 0; j < this.connections[i].length; j++) {
-                if(this.connections[i][j] < 4) {
-                    this.connections[i][j]++;
-                } else if(this.connections[i][j] == 4) {
-                    this.connections[i][j] = 1;
-                }
-            }
+            this.connections[i].rotate();
         }
+    }
+}
+
+function Connection(start, end) {
+    this.start = start;
+    this.end = end;
+    this.isPartOfPath = false;
+
+    this.isEndpoint = function() {
+        return (this.start === DIRECTION.CENTER || this.end === DIRECTION.CENTER);
+    }
+
+    this.rotate = function() {
+        if(this.start < 4) this.start++;
+        else if(this.start === 4) this.start = 1;
+        
+        if(this.end < 4) this.end++;
+        else if(this.end === 4) this.end = 1;
     }
 }
