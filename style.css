@@ -23,6 +23,10 @@ input {
     width:3em;
 }
 
+footer {
+    font-size:small;
+}
+
 #center-div {
     display:inline-block;
     width:90%;
