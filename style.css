@@ -1,8 +1,10 @@
 body {
     text-align:center;
     font-family:sans-serif;
-    background:#0e6363;
+    background:#155989;
     color:white;
+    margin:0;
+    padding:0;
 }
 
 h1 {
@@ -19,6 +21,9 @@ a:hover {
 
 #center-div {
     display:inline-block;
+    width:90%;
+    max-width:500px;
+    min-width:200px;
 }
 
 #game-canvas {

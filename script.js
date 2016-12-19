@@ -11,11 +11,12 @@
 
 // These are the dimensions used for generating and drawing the board.
 const dimensions = {
-    tileSize: 60,
     tileMargin: 2,
     boardWidth: 8,
     boardHeight: 8
 }
+
+var tileSize;
 
 // In this enumeration the possible directions in which connections can go are stored.
 // Center is used for connecting endpoints to other tiles.
@@ -39,8 +40,7 @@ const pathStatus = {
 window.onload = function() {
     var canvas = document.getElementById('game-canvas');
     if(canvas.getContext) {
-        canvas.width = dimensions.tileMargin + (dimensions.boardWidth * (dimensions.tileSize + dimensions.tileMargin));
-        canvas.height = dimensions.tileMargin + (dimensions.boardHeight * (dimensions.tileSize + dimensions.tileMargin));
+        calculateDimensions();
         var context = canvas.getContext('2d');
         var board = generateBoard();        
         updateBoard(board);
@@ -49,8 +49,8 @@ window.onload = function() {
         // When the canvas is clicked we rotate the corresponding tile and update and redraw the board.
         canvas.onclick = function(event) {
             event.preventDefault();
-            var x = Math.floor((event.offsetX - dimensions.tileMargin) / (dimensions.tileSize + dimensions.tileMargin));
-            var y = Math.floor((event.offsetY - dimensions.tileMargin) / (dimensions.tileSize + dimensions.tileMargin));
+            var x = Math.floor((event.offsetX - dimensions.tileMargin) / (tileSize + dimensions.tileMargin));
+            var y = Math.floor((event.offsetY - dimensions.tileMargin) / (tileSize + dimensions.tileMargin));
             if(x >= 0 && x < (dimensions.boardWidth) && y >= 0 && y < (dimensions.boardHeight)) {
                 board[x][y].rotate();
             }
@@ -61,6 +61,20 @@ window.onload = function() {
         // To prevent selecting text when double clicking we listen to onselectstart and return false.
         canvas.onselectstart = function() {
             return false;
+        }
+
+        // When the window gets resized we need to recalculate the dimensions and redraw the board to match the new window size.
+        window.onresize = function() {
+            calculateDimensions();
+            drawBoard(context, board);
+        }
+
+        // Here we resize the canvas to match its parent div's dimensions. After that the new tile size is calculated.
+        function calculateDimensions() {
+            canvas.width = canvas.parentNode.clientWidth;
+            tileSize = Math.floor((canvas.width - dimensions.tileMargin) / dimensions.boardWidth) - dimensions.tileMargin;
+            canvas.width = dimensions.tileMargin + (dimensions.boardWidth * (tileSize + dimensions.tileMargin));
+            canvas.height = dimensions.tileMargin + (dimensions.boardHeight * (tileSize + dimensions.tileMargin));
         }
 
         // When the restart link is clicked we generate a new board.
@@ -135,13 +149,13 @@ function drawBoard(context, board) {
     context.clearRect(0, 0, context.canvas.width, context.canvas.height);
     for(var x = 0; x < board.length; x++) {
         for(var y = 0; y < board[x].length; y++) {
-            var horizontalOffset = dimensions.tileMargin + (x * (dimensions.tileSize + dimensions.tileMargin));
-            var verticalOffset = dimensions.tileMargin + (y * (dimensions.tileSize + dimensions.tileMargin));
+            var horizontalOffset = dimensions.tileMargin + (x * (tileSize + dimensions.tileMargin));
+            var verticalOffset = dimensions.tileMargin + (y * (tileSize + dimensions.tileMargin));
 
             if(board[x][y].pathStatus === pathStatus.partial) {
-                context.fillStyle = '#ffc08b';
+                context.fillStyle = '#ffe28d';
             } else if(board[x][y].pathStatus === pathStatus.complete) {
-                context.fillStyle = '#72d172';
+                context.fillStyle = '#73d0a6';
             } else {
                 context.fillStyle = '#ffffff';
             }
@@ -149,11 +163,11 @@ function drawBoard(context, board) {
             context.fillRect(
                 horizontalOffset,
                 verticalOffset,
-                dimensions.tileSize,
-                dimensions.tileSize
+                tileSize,
+                tileSize
             );
             
-            context.strokeStyle = '#006363';
+            context.strokeStyle = '#4982ab';
             
             for(var i = 0; i < board[x][y].connections.length; i++) {
                 context.lineWidth = 4;
@@ -163,29 +177,29 @@ function drawBoard(context, board) {
 
                 if((connection[0] == directions.top && connection[1] == directions.right) ||(connection[0] == directions.right && connection[1] == directions.top)) {
                     // Top Right:
-                    context.arc(horizontalOffset + dimensions.tileSize, verticalOffset, (dimensions.tileSize / 2), 0.5 * Math.PI, Math.PI);
+                    context.arc(horizontalOffset + tileSize, verticalOffset, (tileSize / 2), 0.5 * Math.PI, Math.PI);
                 } else if((connection[0] == directions.bottom && connection[1] == directions.right) ||(connection[0] == directions.right && connection[1] == directions.bottom)) {
                     // Bottom Right:
-                    context.arc(horizontalOffset + dimensions.tileSize, verticalOffset + dimensions.tileSize, (dimensions.tileSize / 2), Math.PI, 1.5 * Math.PI);
+                    context.arc(horizontalOffset + tileSize, verticalOffset + tileSize, (tileSize / 2), Math.PI, 1.5 * Math.PI);
                 } else if((connection[0] == directions.bottom && connection[1] == directions.left) ||(connection[0] == directions.left && connection[1] == directions.bottom)) {
                     // Bottom Left:
-                    context.arc(horizontalOffset, verticalOffset + dimensions.tileSize, (dimensions.tileSize / 2), 1.5 * Math.PI, 0);
+                    context.arc(horizontalOffset, verticalOffset + tileSize, (tileSize / 2), 1.5 * Math.PI, 0);
                 } else if((connection[0] == directions.top && connection[1] == directions.left) ||(connection[0] == directions.left && connection[1] == directions.top)) {
                     // Top Left:
-                    context.arc(horizontalOffset, verticalOffset, (dimensions.tileSize / 2), 0, 0.5 * Math.PI);
+                    context.arc(horizontalOffset, verticalOffset, (tileSize / 2), 0, 0.5 * Math.PI);
                 } else {
                     function getStrokePosition(direction) {
                         switch(direction) {
                             case directions.top:
-                                return { x: horizontalOffset + (dimensions.tileSize / 2), y: verticalOffset };
+                                return { x: horizontalOffset + (tileSize / 2), y: verticalOffset };
                             case directions.right:
-                                return { x: horizontalOffset + dimensions.tileSize, y: verticalOffset + (dimensions.tileSize / 2) };
+                                return { x: horizontalOffset + tileSize, y: verticalOffset + (tileSize / 2) };
                             case directions.bottom:
-                                return { x: horizontalOffset + (dimensions.tileSize / 2), y: verticalOffset + dimensions.tileSize };
+                                return { x: horizontalOffset + (tileSize / 2), y: verticalOffset + tileSize };
                             case directions.left:
-                                return { x: horizontalOffset, y: verticalOffset + (dimensions.tileSize / 2) };
+                                return { x: horizontalOffset, y: verticalOffset + (tileSize / 2) };
                             case directions.center:
-                                return { x: horizontalOffset + (dimensions.tileSize / 2), y: verticalOffset + (dimensions.tileSize / 2) };
+                                return { x: horizontalOffset + (tileSize / 2), y: verticalOffset + (tileSize / 2) };
                                 break;
                         }
                     }
@@ -202,7 +216,7 @@ function drawBoard(context, board) {
 
             if(board[x][y].isEndpoint()) {
                 context.beginPath();
-                context.arc(horizontalOffset + dimensions.tileSize / 2, verticalOffset + dimensions.tileSize / 2, dimensions.tileSize / 5, 0, 2 * Math.PI)
+                context.arc(horizontalOffset + tileSize / 2, verticalOffset + tileSize / 2, tileSize / 5, 0, 2 * Math.PI)
                 context.fillStyle = '#ffffff';
                 context.fill();
                 context.stroke();
