@@ -189,7 +189,6 @@ function Game(canvas) {
                         newX--;
                         break;
                     case DIRECTION.CENTER:
-                        console.log(tile);
                         connection.isPartOfPath = true;
                         return tile;
                 }
