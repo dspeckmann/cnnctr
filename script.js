@@ -1,4 +1,3 @@
-// TODO: Put boundary check into function
 // TODO: Put "direction switch" into its own function
 // TODO: Implement split paths (odd number of endpoints)
 // TODO: Write function for oddly distributed choices
@@ -186,61 +185,36 @@ function Game(canvas) {
             return;
         }
 
-        var newX, newY;
+        var nextTile;
         var tries = 100;
         do {
+            // We need to limit tries so the game does not get caught in an endless loop
             if(tries === 0) {
                 if(lastDirection !== DIRECTION.CENTER) {
                     start.connections.push(new Connection(lastDirection, DIRECTION.CENTER, true));
                 }
                 return;
             }
+            tries--;
+
             // We skip one direction because the path cannot go backwards.
             var newDirection = Math.floor(Math.random() * 3) + 1;
             if(newDirection >= lastDirection) {
                 newDirection++;
             }
-            newX = start.x;
-            newY = start.y;
-            switch(newDirection) {
-                case DIRECTION.TOP:
-                    newY--;
-                    break;
-                case DIRECTION.RIGHT:
-                    newX++;
-                    break;
-                case DIRECTION.BOTTOM:
-                    newY++;
-                    break;
-                case DIRECTION.LEFT:
-                    newX--;
-                    break;
-            }
-            tries--;
-        // We check the boundaries once again. The current path must only cross other paths, not endpoints. We also don't put endpoints on existing paths.
-        } while (newX < 0 || newX >= this.boardWidth || newY < 0 || newY >= this.boardHeight || this.board[newX][newY].isEndpoint() || (length === 2 && this.board[newX][newY].isPartOfPath()) || start.hasConnection(new Connection(lastDirection, newDirection)));
+
+            nextTile = this.getNextTile(start, newDirection);
+        // We check if we have a valid tile. The current path must only cross other paths, not endpoints. We also don't put endpoints on existing paths.
+        } while (nextTile === false || nextTile.isEndpoint() || (length === 2 && nextTile.isPartOfPath()) || start.hasConnection(new Connection(lastDirection, newDirection)));
 
         start.connections.push(new Connection(lastDirection, newDirection, true));
         this.generatePath(this.board[newX][newY], length - 1, this.getOppositeDirection(newDirection));
     }
 
-    this.getNeighbor = function(currentTile, direction) {
-        newX = currentTile.x;
-        newY = currentTile.y;
-        switch(newDirection) {
-            case DIRECTION.TOP:
-                newY--;
-                break;
-            case DIRECTION.RIGHT:
-                newX++;
-                break;
-            case DIRECTION.BOTTOM:
-                newY++;
-                break;
-            case DIRECTION.LEFT:
-                newX--;
-                break;
-        }
+    // This function returns the neighbor tile if it is still inside the bounds, false otherwise
+    this.getNextTile = function(currentTile, direction) {
+        newX = currentTile.x + (direction === DIRECTION.RIGHT ? 1 : direction === DIRECTION.LEFT ? -1 : 0);
+        newY = currentTile.y + (direction === DIRECTION.TOP ? -1 : direction === DIRECTION.BOTTOM ? 1 : 0);
 
         if(newX < 0 || newX >= this.boardWidth || newY < 0 || newY >= this.boardHeight) {
             return false;
@@ -285,32 +259,23 @@ function Game(canvas) {
                     continue;
                 }
 
-                var newX = tile.x;
-                var newY = tile.y;
-                switch(newDirection) {
-                    case DIRECTION.TOP:
-                        newY--;
-                        break;
-                    case DIRECTION.RIGHT:
-                        newX++;
-                        break;
-                    case DIRECTION.BOTTOM:
-                        newY++;
-                        break;
-                    case DIRECTION.LEFT:
-                        newX--;
-                        break;
-                    case DIRECTION.CENTER:
-                        connection.isPartOfPath = true;
-                        return tile;
+                // We try to get the next tile
+                var nextTile = this.getNextTile(tile, newDirection);
+                if(nextTile === false) {
+                    return;
+                }
+                
+                // If the next tile equals the current one, we have reached an endpoint
+                if(nextTile === tile) {
+                    connection.isPartOfPath = true;
+                    return tile;
                 }
 
-                if(newX >= 0 && newX < this.boardWidth && newY >= 0 && newY < this.boardHeight) {
-                    var endpoint = this.followPath(this.board[newX][newY], this.getOppositeDirection(newDirection), alreadyVisited);
-                    if(endpoint) {
-                        connection.isPartOfPath = true;
-                        return endpoint;
-                    }
+                // Otherwise we continue to follow the path
+                var endpoint = this.followPath(nextTile, this.getOppositeDirection(newDirection), alreadyVisited);
+                if(endpoint) {
+                    connection.isPartOfPath = true;
+                    return endpoint;
                 }
             }
 
