@@ -26,8 +26,12 @@ window.onload = function() {
     var game = new Game(canvas);
     game.start();
 
-    // When the restart link is clicked we restart the game.
+    // When one of the restart link is clicked we restart the game.
     document.getElementById('restart-link').onclick = function(event) {
+        game.start();
+    }
+
+    document.getElementById('start-link').onclick = function(event) {
         game.start();
     }
 
