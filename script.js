@@ -1,6 +1,7 @@
 // TODO: Put "direction switch" into its own function
 // TODO: Implement split paths (odd number of endpoints)
 // TODO: Write function for oddly distributed choices
+// TODO: Let user input percentages
 
 // This constant represents the margin between two tiles.
 const MARGIN = 2;
@@ -100,54 +101,34 @@ function Game(canvas) {
 
         for(var x = 0; x < this.boardWidth; x++) {
             for(var y = 0; y < this.boardHeight; y++) {
-                // We want zero to three connections per tile with 40% probability for one, 30% for two, 10% for three and 20% for none at all.
-                // For endpoints we do not want more than one connection.
+                // We want zero to three connections per tile with 40% probability for one, 25% for two, 10% for three
+                // and 25% for none at all (making it an obstacle). For endpoints we do not want any connection.
                 var rand = Math.random();
-                var count;
-                if(this.board[x][y].isEndpoint()) {
-                    if(rand > 0.5) {
-                        count = 1;
-                    } else {
-                        count = 0;
-                    }
-                } else {
+                var count = 0;
+                if(!this.board[x][y].isEndpoint()) {
                     if(rand > 0.6) {
                         count = 1;
-                    } else if(rand > 0.3) {
+                    } else if(rand > 0.35) {
                         count = 2;
-                    } else if(rand > 0.2) {
+                    } else if(rand > 0.25) {
                         count = 3;
-                    } else {
-                        count = 0;
                     }
                 }
                 
                 for(var i = 0; i < count; i++) {
+                    console.log(this.board[x][y].isEndpoint());
                     rand = Math.random();
                     var connection;
-                    // If the tile is an endpoint we do not want any crossing paths.
-                    if(this.board[x][y].isEndpoint()) {
-                        if(rand > 0.75) {
-                            connection = new Connection(DIRECTION.TOP, DIRECTION.RIGHT);
-                        } else if(rand > 0.5) {
-                            connection = new Connection(DIRECTION.RIGHT, DIRECTION.BOTTOM);
-                        } else if(rand > 0.25) {
-                            connection = new Connection(DIRECTION.BOTTOM, DIRECTION.LEFT);
-                        } else {
-                            connection = new Connection(DIRECTION.LEFT, DIRECTION.TOP);
-                        }
+                    if(rand > 0.88) {
+                        connection = new Connection(DIRECTION.TOP, DIRECTION.RIGHT);
+                    } else if(rand > 0.66) {
+                        connection = new Connection(DIRECTION.RIGHT, DIRECTION.BOTTOM);
+                    } else if(rand > 0.44) {
+                        connection = new Connection(DIRECTION.BOTTOM, DIRECTION.LEFT);
+                    } else if(rand > 0.22) {
+                        connection = new Connection(DIRECTION.LEFT, DIRECTION.TOP);
                     } else {
-                        if(rand > 0.88) {
-                            connection = new Connection(DIRECTION.TOP, DIRECTION.RIGHT);
-                        } else if(rand > 0.66) {
-                            connection = new Connection(DIRECTION.RIGHT, DIRECTION.BOTTOM);
-                        } else if(rand > 0.44) {
-                            connection = new Connection(DIRECTION.BOTTOM, DIRECTION.LEFT);
-                        } else if(rand > 0.22) {
-                            connection = new Connection(DIRECTION.LEFT, DIRECTION.TOP);
-                        } else {
-                            connection = new Connection(DIRECTION.TOP, DIRECTION.BOTTOM);
-                        }
+                        connection = new Connection(DIRECTION.TOP, DIRECTION.BOTTOM);
                     }
 
                     // Check if an equal connection already exists so we don't add it again.
@@ -186,14 +167,29 @@ function Game(canvas) {
         }
 
         var nextTile;
-        var tries = 100;
+        var tries = 500;
         do {
-            // We need to limit tries so the game does not get caught in an endless loop
+            // We apparently need to limit tries so the game does not get caught in an endless loop.
             if(tries === 0) {
-                if(lastDirection !== DIRECTION.CENTER) {
-                    start.connections.push(new Connection(lastDirection, DIRECTION.CENTER, true));
+                if(lastDirection === DIRECTION.CENTER) {
+                    return;
                 }
-                return;
+
+                if(!start.isPartOfPath() && !start.isEndpoint()) {
+                    start.connections.push(new Connection(lastDirection, DIRECTION.CENTER, true));
+                    return;
+                } else {
+                    var lastTile = this.getNextTile(start, lastDirection);
+                    for(var i = 0; i < lastTile.connections.length; i++) {
+                        var connection = lastTile.connections[i];
+                        if(connection.start === DIRECTION.CENTER || connection.end === DIRECTION.CENTER) {
+                            return;
+                        } else if(connection.end === this.getOppositeDirection(lastDirection)) {
+                            connection.end = DIRECTION.CENTER;
+                            return;
+                        }
+                    }
+                }
             }
             tries--;
 
@@ -204,8 +200,9 @@ function Game(canvas) {
             }
 
             nextTile = this.getNextTile(start, newDirection);
-        // We check if we have a valid tile. The current path must only cross other paths, not endpoints. We also don't put endpoints on existing paths.
-        } while (nextTile === false || nextTile.isEndpoint() || (length === 2 && nextTile.isPartOfPath()) || start.hasConnection(new Connection(lastDirection, newDirection)));
+        // We check if we have a valid tile. The current path is only allowed to cross other paths, not endpoints.
+        // We also don't put endpoints on existing paths.
+        } while (nextTile === false || nextTile.isEndpoint() || (length === 2 && nextTile.isPartOfPath()) || start.hasConnectionAt(lastDirection) || start.hasConnectionAt(newDirection));
 
         start.connections.push(new Connection(lastDirection, newDirection, true));
         this.generatePath(this.board[newX][newY], length - 1, this.getOppositeDirection(newDirection));
@@ -500,9 +497,18 @@ function Tile(x, y, connections) {
         return this.connections.length === 0;   
     }
 
-    this.hasConnection = function(other) {
+    this.hasConnection = function(connection) {
         for(var i = 0; i < this.connections.length; i++) {
-            if(this.connections[i].equals(other)) {
+            if(this.connections[i].equals(connection)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    this.hasConnectionAt = function(direction) {
+        for(var i = 0; i < this.connections.length; i++) {
+            if(this.connections[i].hasDirection(direction)) {
                 return true;
             }
         }
@@ -536,5 +542,9 @@ function Connection(start, end, isPartOfPath = false) {
 
     this.equals = function(other) {
         return (this.start === other.start && this.end === other.end) || (this.start === other.end && this.end === other.start);
+    }
+
+    this.hasDirection = function(direction) {
+        return (this.start === direction || this.end === direction);
     }
 }
